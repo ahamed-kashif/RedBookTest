@@ -10,5 +10,6 @@ Route::get('/user', function (Request $request) {
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('companies/stats', [CompanyController::class, 'stats'])->name('companies.stats');
+    Route::delete('companies', [CompanyController::class, 'destroyMany'])->name('companies.destroyMany');
     Route::apiResource('companies', CompanyController::class);
 });

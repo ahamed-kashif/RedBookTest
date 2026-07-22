@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 import { Plus } from '@lucide/vue';
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
+import CompaniesFilters from '@/components/companies/CompaniesFilters.vue';
 import CompaniesTable from '@/components/companies/CompaniesTable.vue';
 import CompanyFormModal from '@/components/companies/CompanyFormModal.vue';
 import DeleteCompanyDialog from '@/components/companies/DeleteCompanyDialog.vue';
@@ -18,7 +19,7 @@ import {
 } from '@/components/ui/card';
 import { useCompanies } from '@/composables/useCompanies';
 import { dashboard } from '@/routes';
-import type { Company } from '@/types';
+import type { Company, CompanySortColumn, SortDirection } from '@/types';
 
 defineOptions({
     layout: {
@@ -31,16 +32,36 @@ const { companies, meta, companyStats, loading, fetchCompanies, fetchStats } =
 
 const page = ref(1);
 const perPage = ref(15);
+const sortColumn = ref<CompanySortColumn>('created_at');
+const sortDirection = ref<SortDirection>('desc');
+const search = ref('');
+const createdFrom = ref('');
+const createdTo = ref('');
+const startingFrom = ref('');
+const startingTo = ref('');
+
+const selectedIds = ref<number[]>([]);
 
 const formModalOpen = ref(false);
 const formModalMode = ref<'create' | 'edit' | 'view'>('create');
 const activeCompany = ref<Company | null>(null);
 
 const deleteDialogOpen = ref(false);
-const companyPendingDelete = ref<Company | null>(null);
+const companiesPendingDelete = ref<Company[]>([]);
 
 function loadCompanies() {
-    fetchCompanies(page.value, perPage.value);
+    selectedIds.value = [];
+    fetchCompanies({
+        page: page.value,
+        perPage: perPage.value,
+        sort: sortColumn.value,
+        direction: sortDirection.value,
+        search: search.value || undefined,
+        createdFrom: createdFrom.value || undefined,
+        createdTo: createdTo.value || undefined,
+        startingFrom: startingFrom.value || undefined,
+        startingTo: startingTo.value || undefined,
+    });
 }
 
 onMounted(() => {
@@ -58,6 +79,23 @@ function handlePerPageChange(newPerPage: number) {
     page.value = 1;
     loadCompanies();
 }
+
+function handleSort(column: CompanySortColumn) {
+    if (sortColumn.value === column) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortColumn.value = column;
+        sortDirection.value = 'asc';
+    }
+
+    page.value = 1;
+    loadCompanies();
+}
+
+watch([search, createdFrom, createdTo, startingFrom, startingTo], () => {
+    page.value = 1;
+    loadCompanies();
+});
 
 function openCreateModal() {
     activeCompany.value = null;
@@ -78,7 +116,14 @@ function openEditModal(company: Company) {
 }
 
 function openDeleteDialog(company: Company) {
-    companyPendingDelete.value = company;
+    companiesPendingDelete.value = [company];
+    deleteDialogOpen.value = true;
+}
+
+function openBulkDeleteDialog() {
+    companiesPendingDelete.value = companies.value.filter((company) =>
+        selectedIds.value.includes(company.id),
+    );
     deleteDialogOpen.value = true;
 }
 
@@ -125,13 +170,26 @@ function handleDeleted() {
                     </Button>
                 </CardAction>
             </CardHeader>
-            <CardContent>
+            <CardContent class="flex flex-col gap-4">
+                <CompaniesFilters
+                    v-model:search="search"
+                    v-model:created-from="createdFrom"
+                    v-model:created-to="createdTo"
+                    v-model:starting-from="startingFrom"
+                    v-model:starting-to="startingTo"
+                    :selected-count="selectedIds.length"
+                    @delete-selected="openBulkDeleteDialog"
+                />
                 <CompaniesTable
                     :companies="companies"
                     :loading="loading"
+                    v-model:selected-ids="selectedIds"
+                    :sort-column="sortColumn"
+                    :sort-direction="sortDirection"
                     @view="openViewModal"
                     @edit="openEditModal"
                     @delete="openDeleteDialog"
+                    @sort="handleSort"
                 />
             </CardContent>
             <CardFooter>
@@ -154,7 +212,7 @@ function handleDeleted() {
 
     <DeleteCompanyDialog
         v-model:is-open="deleteDialogOpen"
-        :company="companyPendingDelete"
+        :companies="companiesPendingDelete"
         @deleted="handleDeleted"
     />
 </template>

@@ -8,6 +8,14 @@ export type Company = {
     updated_at: string;
 };
 
+export type PaginationLink = {
+    url: string | null;
+    label: string;
+    // The "..." ellipsis entry omits `page` entirely rather than setting it null.
+    page?: number | null;
+    active: boolean;
+};
+
 export type PaginationMeta = {
     current_page: number;
     from: number | null;
@@ -15,6 +23,7 @@ export type PaginationMeta = {
     per_page: number;
     to: number | null;
     total: number;
+    links: PaginationLink[];
 };
 
 export type Paginated<T> = {
@@ -42,4 +51,21 @@ export type CompanyFormData = {
     address: string;
     email: string;
     starting_date: string;
+};
+
+export type SortDirection = 'asc' | 'desc';
+
+export type CompanySortColumn =
+    'id' | 'name' | 'address' | 'email' | 'starting_date' | 'created_at';
+
+export type CompanyListParams = {
+    page?: number;
+    perPage?: number;
+    sort?: CompanySortColumn;
+    direction?: SortDirection;
+    search?: string;
+    createdFrom?: string;
+    createdTo?: string;
+    startingFrom?: string;
+    startingTo?: string;
 };

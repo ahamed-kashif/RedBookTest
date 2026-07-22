@@ -14,9 +14,28 @@ class CompanyService
     /**
      * @return LengthAwarePaginator<int, Company>
      */
-    public function listForUser(User $user, int $perPage = 15): LengthAwarePaginator
-    {
-        return $this->companies->paginateForUser($user, $perPage);
+    public function listForUser(
+        User $user,
+        int $perPage = 15,
+        ?string $sort = null,
+        string $direction = 'asc',
+        ?string $search = null,
+        ?string $createdFrom = null,
+        ?string $createdTo = null,
+        ?string $startingFrom = null,
+        ?string $startingTo = null,
+    ): LengthAwarePaginator {
+        return $this->companies->paginateForUser(
+            $user,
+            $perPage,
+            $sort,
+            $direction,
+            $search,
+            $createdFrom,
+            $createdTo,
+            $startingFrom,
+            $startingTo,
+        );
     }
 
     /**
@@ -58,5 +77,13 @@ class CompanyService
     public function stats(User $user): array
     {
         return $this->companies->statsForUser($user);
+    }
+
+    /**
+     * @param  array<int, int>  $ids
+     */
+    public function deleteMany(User $user, array $ids): int
+    {
+        return $this->companies->deleteManyForUser($user, $ids);
     }
 }

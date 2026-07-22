@@ -2,14 +2,20 @@ import { useHttp } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import type { Ref } from 'vue';
 import { index, stats } from '@/routes/companies';
-import type { Company, CompanyStats, Paginated, PaginationMeta } from '@/types';
+import type {
+    Company,
+    CompanyListParams,
+    CompanyStats,
+    Paginated,
+    PaginationMeta,
+} from '@/types';
 
 export type UseCompaniesReturn = {
     companies: Ref<Company[]>;
     meta: Ref<PaginationMeta | null>;
     companyStats: Ref<CompanyStats | null>;
     loading: Ref<boolean>;
-    fetchCompanies: (page?: number, perPage?: number) => Promise<void>;
+    fetchCompanies: (params?: CompanyListParams) => Promise<void>;
     fetchStats: () => Promise<void>;
 };
 
@@ -21,12 +27,47 @@ export function useCompanies(): UseCompaniesReturn {
     const companyStats = ref<CompanyStats | null>(null);
     const loading = ref(false);
 
-    const fetchCompanies = async (page = 1, perPage = 15): Promise<void> => {
+    const fetchCompanies = async (
+        params: CompanyListParams = {},
+    ): Promise<void> => {
         loading.value = true;
+
+        const query: Record<string, string | number> = {
+            page: params.page ?? 1,
+            per_page: params.perPage ?? 15,
+        };
+
+        if (params.sort) {
+            query.sort = params.sort;
+        }
+
+        if (params.direction) {
+            query.direction = params.direction;
+        }
+
+        if (params.search) {
+            query.search = params.search;
+        }
+
+        if (params.createdFrom) {
+            query.created_from = params.createdFrom;
+        }
+
+        if (params.createdTo) {
+            query.created_to = params.createdTo;
+        }
+
+        if (params.startingFrom) {
+            query.starting_from = params.startingFrom;
+        }
+
+        if (params.startingTo) {
+            query.starting_to = params.startingTo;
+        }
 
         try {
             const response = (await http.get(
-                index.url({ query: { page, per_page: perPage } }),
+                index.url({ query }),
             )) as Paginated<Company>;
 
             companies.value = response.data;

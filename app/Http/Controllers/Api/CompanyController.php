@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\DestroyManyCompaniesRequest;
+use App\Http\Requests\Api\IndexCompanyRequest;
 use App\Http\Requests\Api\StoreCompanyRequest;
 use App\Http\Requests\Api\UpdateCompanyRequest;
 use App\Http\Resources\CompanyResource;
@@ -16,13 +18,21 @@ class CompanyController extends Controller
 {
     public function __construct(private readonly CompanyService $companies) {}
 
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(IndexCompanyRequest $request): AnonymousResourceCollection
     {
         $perPage = min(max((int) $request->integer('per_page', 15), 1), 100);
 
-        return CompanyResource::collection(
-            $this->companies->listForUser($request->user(), $perPage),
-        );
+        return CompanyResource::collection($this->companies->listForUser(
+            $request->user(),
+            $perPage,
+            $request->string('sort')->value() ?: null,
+            $request->string('direction', 'asc')->value(),
+            $request->string('search')->value() ?: null,
+            $request->string('created_from')->value() ?: null,
+            $request->string('created_to')->value() ?: null,
+            $request->string('starting_from')->value() ?: null,
+            $request->string('starting_to')->value() ?: null,
+        ));
     }
 
     public function stats(Request $request): JsonResponse
@@ -63,6 +73,13 @@ class CompanyController extends Controller
     public function destroy(Request $request, int $company): Response
     {
         $this->companies->delete($request->user(), $company);
+
+        return response()->noContent();
+    }
+
+    public function destroyMany(DestroyManyCompaniesRequest $request): Response
+    {
+        $this->companies->deleteMany($request->user(), $request->validated('ids'));
 
         return response()->noContent();
     }

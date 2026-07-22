@@ -8,7 +8,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import type { PaginationMeta } from '@/types';
+import type { PaginationLink, PaginationMeta } from '@/types';
 
 type Props = {
     meta: PaginationMeta | null;
@@ -30,6 +30,33 @@ const isLastPage = computed(
     () => (props.meta?.current_page ?? 1) >= (props.meta?.last_page ?? 1),
 );
 
+// Laravel always puts the Previous link first and the Next link last in
+// meta.links - and, unlike the numbered entries, those two can carry a real
+// (non-null) page number whenever they're not at a boundary, so filtering by
+// page !== null alone doesn't exclude them. Drop them by position instead,
+// then filter out any remaining non-numbered entries (the "..." ellipsis
+// marker, which doesn't even have a `page` key at all).
+const numberedLinks = computed<PaginationLink[]>(() => {
+    const links = props.meta?.links ?? [];
+
+    return links.slice(1, -1).filter((link) => typeof link.page === 'number');
+});
+
+function hasGapBefore(index: number): boolean {
+    if (index === 0) {
+        return false;
+    }
+
+    const previous = numberedLinks.value[index - 1]?.page;
+    const current = numberedLinks.value[index]?.page;
+
+    return (
+        typeof previous === 'number' &&
+        typeof current === 'number' &&
+        current - previous > 1
+    );
+}
+
 function goToPrevious() {
     if (props.meta && !isFirstPage.value) {
         emit('update:page', props.meta.current_page - 1);
@@ -39,6 +66,15 @@ function goToPrevious() {
 function goToNext() {
     if (props.meta && !isLastPage.value) {
         emit('update:page', props.meta.current_page + 1);
+    }
+}
+
+function handlePageClick(link: PaginationLink) {
+    if (
+        typeof link.page === 'number' &&
+        link.page !== props.meta?.current_page
+    ) {
+        emit('update:page', link.page);
     }
 }
 
@@ -92,6 +128,26 @@ function handlePerPageChange(value: unknown) {
                 >
                     Previous
                 </Button>
+
+                <template
+                    v-for="(link, index) in numberedLinks"
+                    :key="link.page"
+                >
+                    <span
+                        v-if="hasGapBefore(index)"
+                        class="px-2 text-muted-foreground"
+                        >&hellip;</span
+                    >
+                    <Button
+                        :variant="link.active ? 'default' : 'outline'"
+                        size="sm"
+                        :aria-current="link.active ? 'page' : undefined"
+                        @click="handlePageClick(link)"
+                    >
+                        {{ link.label }}
+                    </Button>
+                </template>
+
                 <Button
                     variant="outline"
                     size="sm"

@@ -11,38 +11,46 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { destroy } from '@/routes/companies';
+import { destroy, destroyMany } from '@/routes/companies';
 import type { Company } from '@/types';
 
 type Props = {
-    company: Company | null;
+    companies: Company[];
 };
 
 type Emits = {
-    deleted: [companyId: number];
+    deleted: [companyIds: number[]];
 };
 
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 const isOpen = defineModel<boolean>('isOpen', { default: false });
 
-const http = useHttp();
+const form = useHttp<{ ids: number[] }>({ ids: [] });
 
 async function confirmDelete() {
-    if (!props.company) {
+    if (props.companies.length === 0) {
         return;
     }
 
-    const companyId = props.company.id;
+    const ids = props.companies.map((company) => company.id);
+    form.ids = ids;
 
-    await http.submit(destroy({ company: companyId }), {
+    const routeDefinition =
+        ids.length === 1 ? destroy({ company: ids[0] }) : destroyMany();
+
+    await form.submit(routeDefinition, {
         onSuccess: () => {
-            toast.success('Company deleted');
-            emit('deleted', companyId);
+            toast.success(
+                ids.length === 1
+                    ? 'Company deleted'
+                    : `${ids.length} companies deleted`,
+            );
+            emit('deleted', ids);
             isOpen.value = false;
         },
         onError: () => {
-            toast.error('Failed to delete company');
+            toast.error('Failed to delete');
         },
     });
 }
@@ -52,22 +60,33 @@ async function confirmDelete() {
     <Dialog :open="isOpen" @update:open="isOpen = $event">
         <DialogContent>
             <DialogHeader>
-                <DialogTitle>Delete {{ company?.name }}?</DialogTitle>
+                <DialogTitle>
+                    Delete
+                    {{
+                        companies.length === 1
+                            ? companies[0]?.name
+                            : `${companies.length} companies`
+                    }}?
+                </DialogTitle>
                 <DialogDescription>
                     This action cannot be undone. This will permanently delete
-                    this company.
+                    {{
+                        companies.length === 1
+                            ? 'this company'
+                            : 'these companies'
+                    }}.
                 </DialogDescription>
             </DialogHeader>
 
             <DialogFooter class="gap-2">
                 <DialogClose as-child>
-                    <Button variant="secondary" :disabled="http.processing">
+                    <Button variant="secondary" :disabled="form.processing">
                         Cancel
                     </Button>
                 </DialogClose>
                 <Button
                     variant="destructive"
-                    :disabled="http.processing"
+                    :disabled="form.processing"
                     @click="confirmDelete"
                 >
                     Delete

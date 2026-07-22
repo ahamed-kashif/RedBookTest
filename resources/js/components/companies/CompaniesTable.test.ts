@@ -22,8 +22,14 @@ const stubs = {
     TooltipContent: { template: '<div><slot /></div>' },
 };
 
+const baseProps = {
+    selectedIds: [] as number[],
+    sortColumn: null,
+    sortDirection: 'asc' as const,
+};
+
 describe('CompaniesTable', () => {
-    it('renders a row per company', () => {
+    it('renders a row per company, including the id column', () => {
         const companies = [
             makeCompany({ id: 1, name: 'Acme Inc' }),
             makeCompany({
@@ -34,18 +40,20 @@ describe('CompaniesTable', () => {
         ];
 
         const wrapper = mount(CompaniesTable, {
-            props: { companies, loading: false },
+            props: { ...baseProps, companies, loading: false },
             global: { stubs },
         });
 
         expect(wrapper.text()).toContain('Acme Inc');
         expect(wrapper.text()).toContain('Globex Corp');
         expect(wrapper.text()).toContain('info@globex.test');
+        expect(wrapper.text()).toContain('1');
+        expect(wrapper.text()).toContain('2');
     });
 
     it('shows a loading state', () => {
         const wrapper = mount(CompaniesTable, {
-            props: { companies: [], loading: true },
+            props: { ...baseProps, companies: [], loading: true },
             global: { stubs },
         });
 
@@ -54,7 +62,7 @@ describe('CompaniesTable', () => {
 
     it('shows an empty state when there are no companies', () => {
         const wrapper = mount(CompaniesTable, {
-            props: { companies: [], loading: false },
+            props: { ...baseProps, companies: [], loading: false },
             global: { stubs },
         });
 
@@ -65,17 +73,79 @@ describe('CompaniesTable', () => {
         const company = makeCompany();
 
         const wrapper = mount(CompaniesTable, {
-            props: { companies: [company], loading: false },
+            props: { ...baseProps, companies: [company], loading: false },
             global: { stubs },
         });
 
-        const buttons = wrapper.findAll('button');
-        await buttons[0]?.trigger('click');
-        await buttons[1]?.trigger('click');
-        await buttons[2]?.trigger('click');
+        await wrapper.find('[aria-label="View"]').trigger('click');
+        await wrapper.find('[aria-label="Edit"]').trigger('click');
+        await wrapper.find('[aria-label="Delete"]').trigger('click');
 
         expect(wrapper.emitted('view')?.[0]).toEqual([company]);
         expect(wrapper.emitted('edit')?.[0]).toEqual([company]);
         expect(wrapper.emitted('delete')?.[0]).toEqual([company]);
+    });
+
+    it('emits sort with the clicked column', async () => {
+        const wrapper = mount(CompaniesTable, {
+            props: { ...baseProps, companies: [makeCompany()], loading: false },
+            global: { stubs },
+        });
+
+        const nameHeaderButton = wrapper
+            .findAll('button')
+            .find((button) => button.text().includes('Name'));
+
+        await nameHeaderButton?.trigger('click');
+
+        expect(wrapper.emitted('sort')?.[0]).toEqual(['name']);
+    });
+
+    it('selecting a row checkbox emits update:selectedIds with that id added', async () => {
+        const company = makeCompany({ id: 5 });
+
+        const wrapper = mount(CompaniesTable, {
+            props: { ...baseProps, companies: [company], loading: false },
+            global: { stubs },
+        });
+
+        await wrapper.find('[aria-label="Select Acme Inc"]').trigger('click');
+
+        expect(wrapper.emitted('update:selectedIds')?.[0]).toEqual([[5]]);
+    });
+
+    it('the header checkbox selects all rows on the page', async () => {
+        const companies = [makeCompany({ id: 1 }), makeCompany({ id: 2 })];
+
+        const wrapper = mount(CompaniesTable, {
+            props: { ...baseProps, companies, loading: false },
+            global: { stubs },
+        });
+
+        await wrapper
+            .find('[aria-label="Select all on this page"]')
+            .trigger('click');
+
+        expect(wrapper.emitted('update:selectedIds')?.[0]).toEqual([[1, 2]]);
+    });
+
+    it('the header checkbox deselects all rows when already fully selected', async () => {
+        const companies = [makeCompany({ id: 1 }), makeCompany({ id: 2 })];
+
+        const wrapper = mount(CompaniesTable, {
+            props: {
+                ...baseProps,
+                selectedIds: [1, 2],
+                companies,
+                loading: false,
+            },
+            global: { stubs },
+        });
+
+        await wrapper
+            .find('[aria-label="Select all on this page"]')
+            .trigger('click');
+
+        expect(wrapper.emitted('update:selectedIds')?.[0]).toEqual([[]]);
     });
 });

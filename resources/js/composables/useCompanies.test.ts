@@ -3,15 +3,16 @@ import { useCompanies } from '@/composables/useCompanies';
 import type { Company, CompanyStats, Paginated } from '@/types';
 
 const httpGetMock = vi.fn();
+const indexUrlMock = vi.fn(
+    (options?: unknown) => `/api/companies?${JSON.stringify(options)}`,
+);
 
 vi.mock('@inertiajs/vue3', () => ({
     useHttp: () => ({ get: httpGetMock }),
 }));
 
 vi.mock('@/routes/companies', () => ({
-    index: {
-        url: (options?: unknown) => `/api/companies?${JSON.stringify(options)}`,
-    },
+    index: { url: (options?: unknown) => indexUrlMock(options) },
     stats: { url: () => '/api/companies/stats' },
 }));
 
@@ -28,25 +29,30 @@ function makeCompany(overrides: Partial<Company> = {}): Company {
     };
 }
 
+function makePaginated(data: Company[]): Paginated<Company> {
+    return {
+        data,
+        links: { first: null, last: null, prev: null, next: null },
+        meta: {
+            current_page: 1,
+            from: data.length > 0 ? 1 : null,
+            last_page: 1,
+            per_page: 15,
+            to: data.length > 0 ? data.length : null,
+            total: data.length,
+            links: [],
+        },
+    };
+}
+
 describe('useCompanies', () => {
     it('populates companies and meta from fetchCompanies', async () => {
-        const response: Paginated<Company> = {
-            data: [makeCompany()],
-            links: { first: null, last: null, prev: null, next: null },
-            meta: {
-                current_page: 1,
-                from: 1,
-                last_page: 1,
-                per_page: 15,
-                to: 1,
-                total: 1,
-            },
-        };
+        const response = makePaginated([makeCompany()]);
         httpGetMock.mockResolvedValueOnce(response);
 
         const { companies, meta, fetchCompanies } = useCompanies();
 
-        await fetchCompanies(1, 15);
+        await fetchCompanies({ page: 1, perPage: 15 });
 
         expect(companies.value).toEqual(response.data);
         expect(meta.value).toEqual(response.meta);
@@ -65,18 +71,7 @@ describe('useCompanies', () => {
         const promise = fetchCompanies();
         expect(loading.value).toBe(true);
 
-        resolveFetch({
-            data: [],
-            links: { first: null, last: null, prev: null, next: null },
-            meta: {
-                current_page: 1,
-                from: null,
-                last_page: 1,
-                per_page: 15,
-                to: null,
-                total: 0,
-            },
-        });
+        resolveFetch(makePaginated([]));
         await promise;
 
         expect(loading.value).toBe(false);
@@ -95,5 +90,48 @@ describe('useCompanies', () => {
         await fetchStats();
 
         expect(companyStats.value).toEqual(stats);
+    });
+
+    it('only includes non-empty filter keys in the query', async () => {
+        httpGetMock.mockResolvedValueOnce(makePaginated([]));
+
+        const { fetchCompanies } = useCompanies();
+
+        await fetchCompanies({
+            page: 2,
+            perPage: 25,
+            search: 'acme',
+            sort: 'name',
+            direction: 'desc',
+        });
+
+        const query = indexUrlMock.mock.calls.at(-1)?.[0] as {
+            query: Record<string, unknown>;
+        };
+
+        expect(query.query).toEqual({
+            page: 2,
+            per_page: 25,
+            sort: 'name',
+            direction: 'desc',
+            search: 'acme',
+        });
+    });
+
+    it('omits date filters entirely when they are not provided', async () => {
+        httpGetMock.mockResolvedValueOnce(makePaginated([]));
+
+        const { fetchCompanies } = useCompanies();
+
+        await fetchCompanies();
+
+        const query = indexUrlMock.mock.calls.at(-1)?.[0] as {
+            query: Record<string, unknown>;
+        };
+
+        expect(query.query).not.toHaveProperty('created_from');
+        expect(query.query).not.toHaveProperty('created_to');
+        expect(query.query).not.toHaveProperty('starting_from');
+        expect(query.query).not.toHaveProperty('starting_to');
     });
 });
