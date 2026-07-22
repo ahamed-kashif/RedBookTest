@@ -18,9 +18,25 @@ class CompanyController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
+        $perPage = min(max((int) $request->integer('per_page', 15), 1), 100);
+
         return CompanyResource::collection(
-            $this->companies->listForUser($request->user()),
+            $this->companies->listForUser($request->user(), $perPage),
         );
+    }
+
+    public function stats(Request $request): JsonResponse
+    {
+        $stats = $this->companies->stats($request->user());
+
+        return response()->json([
+            'total' => $stats['total'],
+            'added_this_month' => $stats['added_this_month'],
+            'oldest' => $stats['oldest'] ? [
+                'name' => $stats['oldest']->name,
+                'starting_date' => $stats['oldest']->starting_date->toDateString(),
+            ] : null,
+        ]);
     }
 
     public function store(StoreCompanyRequest $request): JsonResponse

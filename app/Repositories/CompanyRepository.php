@@ -40,4 +40,19 @@ class CompanyRepository extends BaseRepository implements CompanyRepositoryInter
 
         return $company;
     }
+
+    /**
+     * @return array{total: int, added_this_month: int, oldest: Company|null}
+     */
+    public function statsForUser(User $user): array
+    {
+        return [
+            'total' => $user->companies()->count(),
+            'added_this_month' => $user->companies()
+                ->whereYear('created_at', now()->year)
+                ->whereMonth('created_at', now()->month)
+                ->count(),
+            'oldest' => $user->companies()->orderBy('starting_date')->first(),
+        ];
+    }
 }

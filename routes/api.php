@@ -9,5 +9,6 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('companies/stats', [CompanyController::class, 'stats'])->name('companies.stats');
     Route::apiResource('companies', CompanyController::class);
 });

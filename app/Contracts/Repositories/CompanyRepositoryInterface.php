@@ -19,4 +19,9 @@ interface CompanyRepositoryInterface extends RepositoryInterface
      * @param  array<string, mixed>  $attributes
      */
     public function createForUser(User $user, array $attributes): Company;
+
+    /**
+     * @return array{total: int, added_this_month: int, oldest: Company|null}
+     */
+    public function statsForUser(User $user): array;
 }

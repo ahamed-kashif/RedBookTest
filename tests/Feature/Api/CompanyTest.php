@@ -186,4 +186,106 @@ class CompanyTest extends TestCase
             'Authorization' => "Bearer {$token}",
         ])->assertOk();
     }
+
+    public function test_authenticated_session_user_can_access_companies_without_sanctum_token(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->getJson(route('companies.index'))
+            ->assertOk();
+    }
+
+    public function test_index_respects_per_page_query_parameter(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        Company::factory()->count(5)->forUser($user)->create();
+
+        $this->getJson(route('companies.index', ['per_page' => 2]))
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('meta.per_page', 2);
+    }
+
+    public function test_index_clamps_per_page_to_maximum(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        Company::factory()->count(3)->forUser($user)->create();
+
+        $this->getJson(route('companies.index', ['per_page' => 1000]))
+            ->assertOk()
+            ->assertJsonPath('meta.per_page', 100);
+    }
+
+    public function test_index_clamps_per_page_to_minimum(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        Company::factory()->count(3)->forUser($user)->create();
+
+        $this->getJson(route('companies.index', ['per_page' => 0]))
+            ->assertOk()
+            ->assertJsonPath('meta.per_page', 1);
+    }
+
+    public function test_guest_cannot_access_stats(): void
+    {
+        $this->getJson(route('companies.stats'))->assertUnauthorized();
+    }
+
+    public function test_stats_returns_totals_for_only_the_authenticated_users_companies(): void
+    {
+        $user = User::factory()->create();
+        Company::factory()->count(2)->forUser($user)->create();
+        Company::factory()->count(3)->create();
+
+        Sanctum::actingAs($user);
+
+        $this->getJson(route('companies.stats'))
+            ->assertOk()
+            ->assertJsonPath('total', 2);
+    }
+
+    public function test_stats_reports_companies_added_this_month(): void
+    {
+        $user = User::factory()->create();
+        Company::factory()->forUser($user)->create(['created_at' => now()]);
+        Company::factory()->forUser($user)->create(['created_at' => now()->subMonths(2)]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson(route('companies.stats'))
+            ->assertOk()
+            ->assertJsonPath('added_this_month', 1);
+    }
+
+    public function test_stats_reports_oldest_company_by_starting_date(): void
+    {
+        $user = User::factory()->create();
+        Company::factory()->forUser($user)->create(['name' => 'Newer Co', 'starting_date' => '2022-01-01']);
+        $oldest = Company::factory()->forUser($user)->create(['name' => 'Oldest Co', 'starting_date' => '2010-01-01']);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson(route('companies.stats'))
+            ->assertOk()
+            ->assertJsonPath('oldest.name', $oldest->name)
+            ->assertJsonPath('oldest.starting_date', '2010-01-01');
+    }
+
+    public function test_stats_returns_null_oldest_when_user_has_no_companies(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $this->getJson(route('companies.stats'))
+            ->assertOk()
+            ->assertJsonPath('total', 0)
+            ->assertJsonPath('oldest', null);
+    }
 }

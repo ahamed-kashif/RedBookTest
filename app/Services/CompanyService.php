@@ -51,4 +51,12 @@ class CompanyService
             $this->companies->findForUserOrFail($user, $id),
         );
     }
+
+    /**
+     * @return array{total: int, added_this_month: int, oldest: Company|null}
+     */
+    public function stats(User $user): array
+    {
+        return $this->companies->statsForUser($user);
+    }
 }
