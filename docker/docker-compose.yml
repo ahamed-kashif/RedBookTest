@@ -1,0 +1,118 @@
+name: redbook-test
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/images/app/Dockerfile
+    container_name: redbook-test_app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ../:/var/www/html
+      - ./images/app/www.conf:/usr/local/etc/php-fpm.d/www.conf
+    networks:
+      - redbook-test_network
+    depends_on:
+      - mysql
+    environment:
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=${DB_DATABASE:-redbook-test_db}
+      - DB_USERNAME=${DB_USERNAME:-redbook-test_user}
+      - DB_PASSWORD=${DB_PASSWORD:-redbook-test_password}
+      - PHP_MEMORY_LIMIT=1024M
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CACHE_STORE=redis
+      - SESSION_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+    healthcheck:
+      test: ["CMD", "test", "-f", "/var/www/html/vendor/autoload.php"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 5s
+
+  queue:
+    build:
+      context: ..
+      dockerfile: docker/images/app/Dockerfile
+    container_name: redbook-test_queue
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: php artisan queue:work --sleep=3 --tries=3
+    volumes:
+      - ../:/var/www/html
+    networks:
+      - redbook-test_network
+    depends_on:
+      app:
+        condition: service_healthy
+      mysql:
+        condition: service_started
+      redis:
+        condition: service_started
+    environment:
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=${DB_DATABASE:-redbook-test_db}
+      - DB_USERNAME=${DB_USERNAME:-redbook-test_user}
+      - DB_PASSWORD=${DB_PASSWORD:-redbook-test_password}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CACHE_STORE=redis
+      - SESSION_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+
+  nginx:
+    image: nginx:alpine
+    container_name: redbook-test_nginx
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-7878}:80"
+    volumes:
+      - ../:/var/www/html
+      - ./config/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - redbook-test_network
+    depends_on:
+      - app
+
+  mysql:
+    image: mysql:8.0
+    container_name: redbook-test_mysql
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-redbook-test_db}
+      MYSQL_USER: ${DB_USERNAME:-redbook-test_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-redbook-test_password}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_password}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - redbook-test_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-root_password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: redbook-test_redis
+    restart: unless-stopped
+    networks:
+      - redbook-test_network
+
+networks:
+  redbook-test_network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
